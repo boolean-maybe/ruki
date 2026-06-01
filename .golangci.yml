@@ -1,0 +1,48 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - revive
+    - unconvert
+    - unparam
+    - gosec
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+
+    staticcheck:
+      checks:
+        - "-SA5011" # t.Fatal stops via runtime.Goexit; nil deref after guard is safe
+
+    govet:
+      enable-all: true
+      disable:
+        - shadow
+        - fieldalignment
+
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+
+    gosec:
+      excludes:
+        - G304
+        - G306
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
