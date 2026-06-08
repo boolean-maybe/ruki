@@ -49,6 +49,9 @@ var builtinFuncs = map[string]struct {
 	"selected_count": {ValueInt, 0, 0},
 	"now":            {ValueTimestamp, 0, 0},
 	"next_date":      {ValueDate, 1, 1},
+	"daily":          {ValueRecurrence, 0, 0},
+	"weekly":         {ValueRecurrence, 1, 1},
+	"monthly":        {ValueRecurrence, 1, 1},
 	"next_enum":      {ValueEnum, 1, 1},
 	"prev_enum":      {ValueEnum, 1, 1},
 	"blocks":         {ValueListRef, 1, 1},
@@ -666,6 +669,22 @@ func (p *Parser) inferFuncCallType(fc *FunctionCall) (ValueType, error) {
 		}
 		if t != ValueRecurrence {
 			return 0, fmt.Errorf("next_date() argument must be recurrence, got %s", typeName(t))
+		}
+	case "weekly":
+		t, err := p.inferExprType(fc.Args[0])
+		if err != nil {
+			return 0, err
+		}
+		if t != ValueString {
+			return 0, fmt.Errorf("weekly() argument must be string, got %s", typeName(t))
+		}
+	case "monthly":
+		t, err := p.inferExprType(fc.Args[0])
+		if err != nil {
+			return 0, err
+		}
+		if t != ValueInt {
+			return 0, fmt.Errorf("monthly() argument must be int, got %s", typeName(t))
 		}
 	case "next_enum", "prev_enum":
 		// Argument must be a bare or qualified field reference to an enum

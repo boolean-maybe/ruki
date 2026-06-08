@@ -431,6 +431,26 @@ func TestValidation_FunctionArgTypes(t *testing.T) {
 			`create title="x" due=next_date(title)`,
 			"next_date() argument must be recurrence",
 		},
+		{
+			"weekly with non-string arg",
+			`create title="x" recurrence=weekly(42)`,
+			"weekly() argument must be string",
+		},
+		{
+			"monthly with non-int arg",
+			`create title="x" recurrence=monthly("x")`,
+			"monthly() argument must be int",
+		},
+		{
+			"daily with an argument",
+			`create title="x" recurrence=daily(1)`,
+			"daily() expects 0 argument(s), got 1",
+		},
+		{
+			"weekly with no argument",
+			`create title="x" recurrence=weekly()`,
+			"weekly() expects 1 argument(s), got 0",
+		},
 	}
 
 	for _, tt := range tests {
@@ -463,6 +483,9 @@ func TestValidation_ValidFunctionUsages(t *testing.T) {
 		{"exists with subquery", `select where exists(select where status = "done")`},
 		{"exists with bare select", `select where not exists(select)`},
 		{"next_date with recurrence field", `create title="x" due=next_date(recurrence)`},
+		{"daily constructor", `create title="x" recurrence=daily()`},
+		{"weekly constructor", `create title="x" recurrence=weekly("monday")`},
+		{"monthly constructor", `create title="x" recurrence=monthly(15)`},
 	}
 
 	for _, tt := range tests {

@@ -953,6 +953,8 @@ func (e *Executor) evalFunctionCall(fc *FunctionCall, ctx evalContext) (interfac
 		return e.evalHas(fc, ctx)
 	case "next_date":
 		return e.evalNextDate(fc, ctx)
+	case "daily", "weekly", "monthly":
+		return e.evalRecurrenceConstructor(fc, ctx)
 	case "next_enum":
 		return e.evalEnumStep(fc, ctx, +1)
 	case "prev_enum":
@@ -1345,6 +1347,70 @@ func (e *Executor) evalNextDate(fc *FunctionCall, ctx evalContext) (interface{},
 		return nil, fmt.Errorf("next_date() argument must be a recurrence value, got %T", val)
 	}
 	return recurrence.NextOccurrence(rec), nil
+}
+
+// evalRecurrenceConstructor evaluates the recurrence constructor builtins
+// daily()/weekly("<weekday>")/monthly(<day>) into a canonical cron string.
+// Argument types are checked statically (see validate.go); value validity
+// (a real weekday name, a day in 1..31) is checked here at runtime because
+// it depends on the recurrence subpackage, not the type system.
+func (e *Executor) evalRecurrenceConstructor(fc *FunctionCall, ctx evalContext) (interface{}, error) {
+	switch fc.Name {
+	case "daily":
+		return string(recurrence.RecurrenceDaily), nil
+	case "weekly":
+		return e.evalWeeklyConstructor(fc, ctx)
+	case "monthly":
+		return e.evalMonthlyConstructor(fc, ctx)
+	default:
+		return nil, fmt.Errorf("unknown recurrence constructor %q", fc.Name)
+	}
+}
+
+func (e *Executor) evalWeeklyConstructor(fc *FunctionCall, ctx evalContext) (interface{}, error) {
+	val, err := e.evalExpr(fc.Args[0], ctx)
+	if err != nil {
+		return nil, err
+	}
+	name, ok := val.(string)
+	if !ok {
+		return nil, fmt.Errorf("weekly() argument must be a string weekday, got %T", val)
+	}
+	// WeeklyRecurrence keys on title-case full names ("Monday"); normalize
+	// the input so the constructor is case-insensitive. It returns
+	// RecurrenceNone for an unrecognized weekday, surfaced as a runtime error.
+	rec := recurrence.WeeklyRecurrence(titleWeekday(name))
+	if rec == recurrence.RecurrenceNone {
+		return nil, fmt.Errorf("weekly(): unknown weekday %q", name)
+	}
+	return string(rec), nil
+}
+
+// titleWeekday normalizes a single ASCII weekday word to title case
+// ("monday" -> "Monday"), avoiding the deprecated strings.Title.
+func titleWeekday(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+func (e *Executor) evalMonthlyConstructor(fc *FunctionCall, ctx evalContext) (interface{}, error) {
+	val, err := e.evalExpr(fc.Args[0], ctx)
+	if err != nil {
+		return nil, err
+	}
+	day, ok := val.(int)
+	if !ok {
+		return nil, fmt.Errorf("monthly() argument must be an int day, got %T", val)
+	}
+	// MonthlyRecurrence returns RecurrenceNone when day is outside 1..31.
+	rec := recurrence.MonthlyRecurrence(day)
+	if rec == recurrence.RecurrenceNone {
+		return nil, fmt.Errorf("monthly(): day must be 1..31, got %d", day)
+	}
+	return string(rec), nil
 }
 
 // evalEnumStep evaluates next_enum(field) / prev_enum(field) using the base

@@ -3067,6 +3067,106 @@ func TestExecuteUpdateWithFunction(t *testing.T) {
 	}
 }
 
+func TestExecuteRecurrenceDaily(t *testing.T) {
+	e := newTestExecutor()
+	p := newTestParser()
+	tikis := []*tikiFixture{
+		{ID: "TIKI-000001", Title: "x", Status: "ready"},
+	}
+
+	stmt, err := p.ParseStatement(`update where id = "TIKI-000001" set recurrence=daily()`)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	result, err := e.testExec(stmt, tikis)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got := result.Update.Updated[0].Recurrence; got != "0 0 * * *" {
+		t.Errorf("expected daily cron '0 0 * * *', got %q", got)
+	}
+}
+
+func TestExecuteRecurrenceWeekly(t *testing.T) {
+	e := newTestExecutor()
+	p := newTestParser()
+	tikis := []*tikiFixture{{ID: "TIKI-000001", Title: "x", Status: "ready"}}
+
+	stmt, err := p.ParseStatement(`update where id = "TIKI-000001" set recurrence=weekly("monday")`)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	result, err := e.testExec(stmt, tikis)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got := result.Update.Updated[0].Recurrence; got != "0 0 * * MON" {
+		t.Errorf("expected '0 0 * * MON', got %q", got)
+	}
+}
+
+func TestExecuteRecurrenceWeeklyCaseInsensitive(t *testing.T) {
+	e := newTestExecutor()
+	p := newTestParser()
+	tikis := []*tikiFixture{{ID: "TIKI-000001", Title: "x", Status: "ready"}}
+
+	stmt, _ := p.ParseStatement(`update where id = "TIKI-000001" set recurrence=weekly("FRIDAY")`)
+	result, err := e.testExec(stmt, tikis)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got := result.Update.Updated[0].Recurrence; got != "0 0 * * FRI" {
+		t.Errorf("expected '0 0 * * FRI', got %q", got)
+	}
+}
+
+func TestExecuteRecurrenceWeeklyUnknownDay(t *testing.T) {
+	e := newTestExecutor()
+	p := newTestParser()
+	tikis := []*tikiFixture{{ID: "TIKI-000001", Title: "x", Status: "ready"}}
+
+	stmt, _ := p.ParseStatement(`update where id = "TIKI-000001" set recurrence=weekly("funday")`)
+	_, err := e.testExec(stmt, tikis)
+	if err == nil {
+		t.Fatal("expected error for unknown weekday")
+	}
+	if !strings.Contains(err.Error(), "unknown weekday") {
+		t.Errorf("expected 'unknown weekday' error, got: %v", err)
+	}
+}
+
+func TestExecuteRecurrenceMonthly(t *testing.T) {
+	e := newTestExecutor()
+	p := newTestParser()
+	tikis := []*tikiFixture{{ID: "TIKI-000001", Title: "x", Status: "ready"}}
+
+	stmt, _ := p.ParseStatement(`update where id = "TIKI-000001" set recurrence=monthly(15)`)
+	result, err := e.testExec(stmt, tikis)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got := result.Update.Updated[0].Recurrence; got != "0 0 15 * *" {
+		t.Errorf("expected '0 0 15 * *', got %q", got)
+	}
+}
+
+func TestExecuteRecurrenceMonthlyOutOfRange(t *testing.T) {
+	e := newTestExecutor()
+	p := newTestParser()
+	tikis := []*tikiFixture{{ID: "TIKI-000001", Title: "x", Status: "ready"}}
+
+	for _, day := range []string{"0", "40"} {
+		stmt, _ := p.ParseStatement(`update where id = "TIKI-000001" set recurrence=monthly(` + day + `)`)
+		_, err := e.testExec(stmt, tikis)
+		if err == nil {
+			t.Fatalf("expected error for monthly(%s)", day)
+		}
+		if !strings.Contains(err.Error(), "1..31") {
+			t.Errorf("monthly(%s): expected '1..31' error, got: %v", day, err)
+		}
+	}
+}
+
 func TestExecuteUpdateListField(t *testing.T) {
 	e := newTestExecutor()
 	p := newTestParser()

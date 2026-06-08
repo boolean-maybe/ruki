@@ -698,6 +698,38 @@ func TestResolveRefTikis(t *testing.T) {
 
 // --- in expression override with string contains ---
 
+// TestExecAction_RecurrenceConstructorDelegation guards the design assumption
+// that the recurrence constructors need no trigger-executor override: they are
+// context-free, so the trigger dispatch's default case must route them to the
+// base executor. If this fails with "unknown function", that assumption broke.
+func TestExecAction_RecurrenceConstructorDelegation(t *testing.T) {
+	te := newTestTriggerExecutor()
+	p := newTestParser()
+
+	trig, err := p.ParseTrigger(`after update where new.status = "ready" update where id = new.id set recurrence=weekly("monday")`)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	newTiki := &tikiFixture{ID: "TIKI-000001", Title: "Standup", Status: "ready"}
+	tc := &TriggerContext{
+		Old:      nil,
+		New:      tikiFromFixture(newTiki),
+		AllTikis: tikisFromFixtures([]*tikiFixture{newTiki}),
+	}
+
+	result, err := te.testExecAction(trig, tc)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Update == nil || len(result.Update.Updated) != 1 {
+		t.Fatal("expected 1 updated tiki")
+	}
+	if got := result.Update.Updated[0].Recurrence; got != "0 0 * * MON" {
+		t.Errorf("expected '0 0 * * MON' from trigger constructor, got %q", got)
+	}
+}
+
 func TestExecAction_NextDateWithQualifiedRef(t *testing.T) {
 	te := newTestTriggerExecutor()
 	p := newTestParser()
