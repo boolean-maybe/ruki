@@ -3067,6 +3067,35 @@ func TestExecuteUpdateWithFunction(t *testing.T) {
 	}
 }
 
+// TestExecuteNextDateOfConstructor pins that next_date() accepts a recurrence
+// constructor (daily()/weekly()/monthly()) as its argument, not just a field
+// reference. The constructors evaluate to the canonical cron string, and
+// next_date()'s non-field branch must coerce that string the same way its
+// field-ref branch already does — otherwise `set recurrence=daily()
+// due=next_date(daily())` type-checks but fails at runtime.
+func TestExecuteNextDateOfConstructor(t *testing.T) {
+	e := newTestExecutor()
+	p := newTestParser()
+	tikis := []*tikiFixture{
+		{ID: "TIKI-000001", Title: "x", Status: "ready"},
+	}
+
+	stmt, err := p.ParseStatement(`update where id = "TIKI-000001" set recurrence=daily() due=next_date(daily())`)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	result, err := e.testExec(stmt, tikis)
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if got := result.Update.Updated[0].Recurrence; got != "0 0 * * *" {
+		t.Errorf("expected daily cron '0 0 * * *', got %q", got)
+	}
+	if result.Update.Updated[0].Due.IsZero() {
+		t.Error("expected non-zero due date from next_date(daily())")
+	}
+}
+
 func TestExecuteRecurrenceDaily(t *testing.T) {
 	e := newTestExecutor()
 	p := newTestParser()

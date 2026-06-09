@@ -1306,26 +1306,15 @@ func chooseFilterParent(tikis []Document, input ExecutionInput, parents ...Docum
 }
 
 func (e *Executor) evalNextDate(fc *FunctionCall, ctx evalContext) (interface{}, error) {
-	// Only allow bare/qualified refs to recurrence, not arbitrary string
-	// literals — next_date("daily") would bypass the recurrence type
-	// contract. The validator enforces this upstream; the runtime check
-	// below is a defense-in-depth for hand-built ASTs.
-	if _, isField := fc.Args[0].(*FieldRef); !isField {
-		if _, isQual := fc.Args[0].(*QualifiedRef); !isQual {
-			// Still evaluate so we can surface a typed error. Only
-			// recurrence.Recurrence is accepted from non-field callers.
-			val, err := e.evalExpr(fc.Args[0], ctx)
-			if err != nil {
-				return nil, err
-			}
-			if val == nil {
-				return nil, nil
-			}
-			if rec, ok := val.(recurrence.Recurrence); ok {
-				return recurrence.NextOccurrence(rec), nil
-			}
-			return nil, fmt.Errorf("next_date() argument must be a recurrence value, got %T", val)
-		}
+	// Reject a raw string literal — next_date("0 0 * * *") would bypass the
+	// recurrence type contract. The validator enforces this upstream (a string
+	// literal infers as ValueString); this guard is defense-in-depth for
+	// hand-built ASTs that skip validation. Recurrence constructors
+	// (daily()/weekly()/monthly()) are *FunctionCall nodes, not string
+	// literals, so they pass — they evaluate to the canonical cron string,
+	// which the coercion below accepts exactly as a recurrence field's value.
+	if _, isStringLiteral := fc.Args[0].(*StringLiteral); isStringLiteral {
+		return nil, fmt.Errorf("next_date() argument must be a recurrence value, got string literal")
 	}
 
 	val, err := e.evalExpr(fc.Args[0], ctx)
@@ -1335,8 +1324,6 @@ func (e *Executor) evalNextDate(fc *FunctionCall, ctx evalContext) (interface{},
 	if val == nil {
 		return nil, nil
 	}
-	// Accept string (from Fields map, which holds recurrence as canonical
-	// string) or recurrence.Recurrence.
 	var rec recurrence.Recurrence
 	switch v := val.(type) {
 	case recurrence.Recurrence:
