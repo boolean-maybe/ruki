@@ -1283,7 +1283,7 @@ func TestScanExprSemantics(t *testing.T) {
 
 	t.Run("FunctionCall with nested id in args", func(t *testing.T) {
 		u, _, err := scanExprSemantics(&FunctionCall{
-			Name: "blocks",
+			Name: "count",
 			Args: []Expr{&FunctionCall{Name: "id"}},
 		})
 		if err != nil {
@@ -2474,7 +2474,7 @@ func TestScanExprSemantics_ListLiteralElementError(t *testing.T) {
 
 func TestScanExprSemantics_FunctionCallArgError(t *testing.T) {
 	_, _, err := scanExprSemantics(&FunctionCall{
-		Name: "blocks",
+		Name: "count",
 		Args: []Expr{&SubQuery{Where: &fakeCondition{}}},
 	})
 	if err == nil || !strings.Contains(err.Error(), "unknown condition type") {

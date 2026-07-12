@@ -28,11 +28,6 @@ type Document interface {
 // DocumentFactory builds a blank Document for create statements.
 type DocumentFactory func() Document
 
-// fieldDependsOn is the well-known field name the blocks() builtin scans to
-// find dependency edges. ruki references it by name rather than depending on
-// any host's field-name registry.
-const fieldDependsOn = "dependsOn"
-
 // IsIdentityField reports whether name is one of ruki's reserved identity/audit
 // field names that live outside the generic field map and are immutable via Set.
 func IsIdentityField(name string) bool {

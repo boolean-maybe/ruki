@@ -481,43 +481,6 @@ func TestExecAction_DeleteWithQualifiedRefs(t *testing.T) {
 	}
 }
 
-func TestExecAction_CascadeEpicCompletion(t *testing.T) {
-	te := newTestTriggerExecutor()
-	p := newTestParser()
-
-	// cascade: when a story completes, complete parent epics if all deps done
-	trig, err := p.ParseTrigger(`after update where new.status = "done" update where id in blocks(old.id) and type = "epic" and dependsOn all status = "done" set status="done"`)
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-
-	story := &tikiFixture{ID: "TIKI-STORY1", Title: "Story", Status: "done", Type: "story"}
-	epic := &tikiFixture{
-		ID: "TIKI-EPIC01", Title: "Epic", Status: "inProgress", Type: "epic",
-		DependsOn: []string{"TIKI-STORY1"},
-	}
-
-	tc := &TriggerContext{
-		Old:      tikiFromFixture(&tikiFixture{ID: "TIKI-STORY1", Status: "inProgress"}),
-		New:      tikiFromFixture(story),
-		AllTikis: tikisFromFixtures([]*tikiFixture{story, epic}),
-	}
-
-	result, err := te.testExecAction(trig, tc)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.Update == nil {
-		t.Fatal("expected Update result")
-	}
-	if len(result.Update.Updated) != 1 {
-		t.Fatalf("expected 1 updated, got %d", len(result.Update.Updated))
-	}
-	if result.Update.Updated[0].Status != "done" {
-		t.Fatalf("expected epic status done, got %q", result.Update.Updated[0].Status)
-	}
-}
-
 func TestExecAction_CleanupDependsOnDelete(t *testing.T) {
 	te := newTestTriggerExecutor()
 	p := newTestParser()
@@ -665,18 +628,6 @@ func TestEqualFoldID(t *testing.T) {
 		if got := equalFoldID(tt.a, tt.b); got != tt.want {
 			t.Errorf("equalFoldID(%q, %q) = %v, want %v", tt.a, tt.b, got, tt.want)
 		}
-	}
-}
-
-func TestBlocksLookup(t *testing.T) {
-	tikis := []*tikiFixture{
-		{ID: "TIKI-AAA001", DependsOn: []string{"TIKI-TARGET"}},
-		{ID: "TIKI-AAA002", DependsOn: []string{"TIKI-OTHER"}},
-		{ID: "TIKI-AAA003", DependsOn: []string{"TIKI-TARGET", "TIKI-OTHER"}},
-	}
-	blockers := blocksLookup("TIKI-TARGET", tikisFromFixtures(tikis))
-	if len(blockers) != 2 {
-		t.Fatalf("expected 2 blockers, got %d", len(blockers))
 	}
 }
 
@@ -1761,33 +1712,6 @@ func TestExecuteDelete_ErrorInFilterTikis(t *testing.T) {
 	}
 }
 
-func TestEvalBlocksOverride_ErrorInEvalExpr(t *testing.T) {
-	te := newTestTriggerExecutor()
-	// blocks() with a QualifiedRef that has unknown qualifier
-	trig := &Trigger{
-		Timing: "after",
-		Event:  "update",
-		Action: &Statement{
-			Update: &UpdateStmt{
-				Where: &CompareExpr{
-					Left: &FieldRef{Name: "id"}, Op: "=",
-					Right: &FunctionCall{Name: "blocks", Args: []Expr{&QualifiedRef{Qualifier: "mid", Name: "id"}}},
-				},
-				Set: []Assignment{{Field: "title", Value: &StringLiteral{Value: "x"}}},
-			},
-		},
-	}
-	tc := &TriggerContext{
-		Old:      tikiFromFixture(&tikiFixture{ID: "TIKI-000001"}),
-		New:      tikiFromFixture(&tikiFixture{ID: "TIKI-000001"}),
-		AllTikis: tikisFromFixtures([]*tikiFixture{{ID: "TIKI-000001"}}),
-	}
-	_, err := te.testExecAction(trig, tc)
-	if err == nil {
-		t.Fatal("expected error for unknown qualifier in blocks() arg")
-	}
-}
-
 func TestEvalNextDateOverride_ErrorInEvalExpr(t *testing.T) {
 	te := newTestTriggerExecutor()
 	// next_date() with a QualifiedRef that has unknown qualifier
@@ -1908,16 +1832,6 @@ func TestResolveQualifiedRef_NewNil(t *testing.T) {
 	}
 	if result.Update == nil {
 		t.Fatal("expected update result")
-	}
-}
-
-func TestBlocksLookup_NoBlockers(t *testing.T) {
-	tikis := []*tikiFixture{
-		{ID: "TIKI-AAA001", DependsOn: []string{"TIKI-OTHER1"}},
-	}
-	blockers := blocksLookup("TIKI-NOPE00", tikisFromFixtures(tikis))
-	if len(blockers) != 0 {
-		t.Fatalf("expected 0 blockers, got %d", len(blockers))
 	}
 }
 
@@ -3802,45 +3716,6 @@ func TestValidateEventTriggerInput_RawTriggerSuccess(t *testing.T) {
 	}
 	if validated.RuntimeMode() != ExecutorRuntimeEventTrigger {
 		t.Fatalf("expected eventTrigger runtime, got %q", validated.RuntimeMode())
-	}
-}
-
-// --- coverage gap: evalExprRecursive QualifiedRef inside nested expression ---
-
-func TestEvalExprRecursive_QualifiedRefInsideFunctionCall(t *testing.T) {
-	te := newTestTriggerExecutor()
-	p := newTestParser()
-
-	// blocks(new.id) — function call arg is a QualifiedRef
-	trig, err := p.ParseTrigger(
-		`after update where new.status = "done" update where id in blocks(new.id) set status="review"`,
-	)
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-
-	completed := &tikiFixture{ID: "TIKI-000001", Status: "done"}
-	blocker := &tikiFixture{
-		ID: "TIKI-000002", Status: "ready",
-		DependsOn: []string{"TIKI-000001"},
-	}
-
-	tc := &TriggerContext{
-		Old:      tikiFromFixture(&tikiFixture{ID: "TIKI-000001", Status: "inProgress"}),
-		New:      tikiFromFixture(completed),
-		AllTikis: tikisFromFixtures([]*tikiFixture{completed, blocker}),
-	}
-
-	result, err := te.testExecAction(trig, tc)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.Update == nil || len(result.Update.Updated) != 1 {
-		t.Fatal("expected 1 updated tiki")
-		return
-	}
-	if result.Update.Updated[0].Status != "review" {
-		t.Fatalf("expected status 'review', got %q", result.Update.Updated[0].Status)
 	}
 }
 

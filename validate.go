@@ -54,7 +54,6 @@ var builtinFuncs = map[string]struct {
 	"monthly":        {ValueRecurrence, 1, 1},
 	"next_enum":      {ValueEnum, 1, 1},
 	"prev_enum":      {ValueEnum, 1, 1},
-	"blocks":         {ValueListRef, 1, 1},
 	"call":           {ValueString, 1, 1},
 	"user":           {ValueString, 0, 0},
 	"filepath":       {ValueString, 0, 0},
@@ -640,19 +639,6 @@ func (p *Parser) inferFuncCallType(fc *FunctionCall) (ValueType, error) {
 	case "has":
 		if err := p.validateHasFuncCall(fc.Args[0]); err != nil {
 			return 0, err
-		}
-	case "blocks":
-		argType, err := p.inferExprType(fc.Args[0])
-		if err != nil {
-			return 0, err
-		}
-		if argType != ValueID && argType != ValueRef && argType != ValueString {
-			return 0, fmt.Errorf("blocks() argument must be an id or ref, got %s", typeName(argType))
-		}
-		if argType == ValueString {
-			if _, ok := fc.Args[0].(*StringLiteral); !ok {
-				return 0, fmt.Errorf("blocks() argument must be an id or ref, got %s", typeName(argType))
-			}
 		}
 	case "call":
 		t, err := p.inferExprType(fc.Args[0])

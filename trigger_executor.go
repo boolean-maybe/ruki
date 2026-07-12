@@ -450,8 +450,6 @@ func (e *triggerExecOverride) evalFunctionCallOverride(fc *FunctionCall, ctx eva
 		return e.evalCountOverride(fc, ctx.current, ctx.allTikis)
 	case "exists":
 		return e.evalExistsOverride(fc, ctx.current, ctx.allTikis)
-	case "blocks":
-		return e.evalBlocksOverride(fc, ctx)
 	case "next_date":
 		return e.evalNextDateOverride(fc, ctx)
 	case "next_enum":
@@ -543,14 +541,6 @@ func (e *triggerExecOverride) evalExistsOverride(fc *FunctionCall, parent Docume
 		}
 	}
 	return false, nil
-}
-
-func (e *triggerExecOverride) evalBlocksOverride(fc *FunctionCall, ctx evalContext) (interface{}, error) {
-	val, err := e.evalExpr(fc.Args[0], ctx)
-	if err != nil {
-		return nil, err
-	}
-	return blocksLookup(val, ctx.allTikis), nil
 }
 
 func (e *triggerExecOverride) evalNextDateOverride(fc *FunctionCall, ctx evalContext) (interface{}, error) {
@@ -777,26 +767,4 @@ func equalFoldID(a, b string) bool {
 		}
 	}
 	return true
-}
-
-// blocksLookup finds all tiki IDs that have the given ID in their dependsOn.
-func blocksLookup(val interface{}, allTikis []Document) []interface{} {
-	targetID := normalizeToString(val)
-	var blockers []interface{}
-	for _, at := range allTikis {
-		deps, ok := tikiStringSlice(at, fieldDependsOn)
-		if !ok {
-			continue
-		}
-		for _, dep := range deps {
-			if equalFoldID(dep, targetID) {
-				blockers = append(blockers, at.ID())
-				break
-			}
-		}
-	}
-	if blockers == nil {
-		blockers = []interface{}{}
-	}
-	return blockers
 }

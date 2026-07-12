@@ -959,8 +959,6 @@ func (e *Executor) evalFunctionCall(fc *FunctionCall, ctx evalContext) (interfac
 		return e.evalEnumStep(fc, ctx, +1)
 	case "prev_enum":
 		return e.evalEnumStep(fc, ctx, -1)
-	case "blocks":
-		return e.evalBlocks(fc, ctx)
 	case "input":
 		return e.evalInput()
 	case "choose":
@@ -1489,59 +1487,6 @@ func enumStepBoundary(fs FieldSpec, direction int) string {
 		return fs.AllowedValues[0]
 	}
 	return fs.AllowedValues[len(fs.AllowedValues)-1]
-}
-
-func (e *Executor) evalBlocks(fc *FunctionCall, ctx evalContext) (interface{}, error) {
-	val, err := e.evalExpr(fc.Args[0], ctx)
-	if err != nil {
-		return nil, err
-	}
-	targetID := strings.ToUpper(normalizeToString(val))
-
-	var blockers []interface{}
-	for _, at := range ctx.allTikis {
-		// Skip tikis without a dependsOn field per the blocks-scan
-		// soft-false rule: absent lists don't block anything.
-		deps, ok := tikiStringSlice(at, fieldDependsOn)
-		if !ok {
-			continue
-		}
-		for _, dep := range deps {
-			if strings.EqualFold(dep, targetID) {
-				blockers = append(blockers, at.ID())
-				break
-			}
-		}
-	}
-	if blockers == nil {
-		blockers = []interface{}{}
-	}
-	return blockers, nil
-}
-
-// tikiStringSlice reads a string-slice-typed field without propagating an
-// absent-field error. Returns (slice, true) when the field is present (even
-// if empty); (nil, false) when absent.
-func tikiStringSlice(t Document, name string) ([]string, bool) {
-	if t == nil {
-		return nil, false
-	}
-	v, ok := t.Get(name)
-	if !ok {
-		return nil, false
-	}
-	switch s := v.(type) {
-	case []string:
-		return s, true
-	case []interface{}:
-		out := make([]string, 0, len(s))
-		for _, elem := range s {
-			out = append(out, normalizeToString(elem))
-		}
-		return out, true
-	default:
-		return nil, true
-	}
 }
 
 // --- binary expression evaluation ---

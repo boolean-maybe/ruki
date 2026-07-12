@@ -380,7 +380,6 @@ func TestValidation_IsEmptyOnAllTypes(t *testing.T) {
 		{"date is empty", `select where due is empty`},
 		{"int is empty", `select where priority is empty`},
 		{"string is not empty", `select where title is not empty`},
-		{"function result is empty", `select where blocks(id) is empty`},
 	}
 
 	for _, tt := range tests {
@@ -411,11 +410,6 @@ func TestValidation_FunctionArgTypes(t *testing.T) {
 		input   string
 		wantErr string
 	}{
-		{
-			"blocks with non-id arg",
-			`select where blocks(priority) is empty`,
-			"blocks() argument must be an id or ref",
-		},
 		{
 			"call with non-string arg",
 			`create title=call(42)`,
@@ -473,8 +467,6 @@ func TestValidation_ValidFunctionUsages(t *testing.T) {
 		name  string
 		input string
 	}{
-		{"blocks with id field", `select where blocks(id) is empty`},
-		{"blocks with id ref", `select where blocks("TIKI-ABC123") is empty`},
 		{"call with string", `create title=call("echo hi")`},
 		{"user", `select where assignee = user()`},
 		{"now", `select where updatedAt < now()`},
@@ -1588,57 +1580,6 @@ func TestValidation_CompareEnumStrictness(t *testing.T) {
 	}
 }
 
-func TestValidation_BlocksRejectsStringFields(t *testing.T) {
-	p := newTestParser()
-
-	tests := []struct {
-		name    string
-		input   string
-		wantErr string
-	}{
-		{
-			"blocks with title field",
-			`select where blocks(title) is empty`,
-			"blocks() argument must be an id or ref",
-		},
-		{
-			"blocks with assignee field",
-			`select where blocks(assignee) is empty`,
-			"blocks() argument must be an id or ref",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := p.ParseStatement(tt.input)
-			if err == nil {
-				t.Fatal("expected error, got nil")
-			}
-			if !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("expected error containing %q, got: %v", tt.wantErr, err)
-			}
-		})
-	}
-
-	// these must remain valid
-	valid := []struct {
-		name  string
-		input string
-	}{
-		{"blocks with id field", `select where blocks(id) is empty`},
-		{"blocks with string literal", `select where blocks("TIKI-ABC123") is empty`},
-	}
-
-	for _, tt := range valid {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := p.ParseStatement(tt.input)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-		})
-	}
-}
-
 func TestValidation_DuplicateAssignments(t *testing.T) {
 	p := newTestParser()
 
@@ -2615,21 +2556,6 @@ func TestValidation_InferFuncCallType_VariableArgRange(t *testing.T) {
 	}
 }
 
-func TestValidation_InferFuncCallType_BlocksStringNonLiteral(t *testing.T) {
-	p := newTestParser()
-	// blocks() with a string-typed non-literal arg (field ref to a string field)
-	_, err := p.inferFuncCallType(&FunctionCall{
-		Name: "blocks",
-		Args: []Expr{&FieldRef{Name: "assignee"}}, // string type, but not a literal
-	})
-	if err == nil {
-		t.Fatal("expected error for blocks() with string non-literal")
-	}
-	if !strings.Contains(err.Error(), "blocks() argument must be an id or ref") {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
 func TestValidation_InferFuncCallType_CallArgError(t *testing.T) {
 	p := newTestParser()
 	_, err := p.inferFuncCallType(&FunctionCall{
@@ -2702,18 +2628,6 @@ func TestValidation_CheckCompareCompat_RightEnumCheck(t *testing.T) {
 }
 
 // --- additional coverage for validate.go uncovered branches ---
-
-func TestValidation_BlocksNonLiteralString(t *testing.T) {
-	p := newTestParser()
-	// blocks() with a non-literal string field (assignee is a string field, not ref/id)
-	_, err := p.ParseStatement(`select where count(select where id in blocks(assignee)) > 0`)
-	if err == nil {
-		t.Fatal("expected error for blocks() with string field argument")
-	}
-	if !strings.Contains(err.Error(), "blocks() argument must be an id or ref") {
-		t.Fatalf("expected blocks() argument error, got: %v", err)
-	}
-}
 
 func TestValidation_LimitZero(t *testing.T) {
 	p := newTestParser()

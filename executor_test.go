@@ -896,24 +896,6 @@ func TestExecuteNextDate(t *testing.T) {
 	}
 }
 
-func TestExecuteBlocks(t *testing.T) {
-	e := newTestExecutor()
-	p := newTestParser()
-	tikis := makeTikis() // TIKI-000002 depends on TIKI-000001
-
-	stmt, err := p.ParseStatement(`select where id in blocks("TIKI-000001")`)
-	if err != nil {
-		t.Fatalf("parse: %v", err)
-	}
-	result, err := e.testExec(stmt, tikis)
-	if err != nil {
-		t.Fatalf("execute: %v", err)
-	}
-	if len(result.Select.Tikis) != 1 || result.Select.Tikis[0].ID != "TIKI-000002" {
-		t.Fatalf("expected TIKI-000002, got %v", result.Select.Tikis)
-	}
-}
-
 // --- call() phase-1 rejection ---
 
 func TestExecuteCallRejected(t *testing.T) {
@@ -2119,16 +2101,6 @@ func TestExecuteErrorPropagation(t *testing.T) {
 				},
 			}},
 		},
-		{
-			"blocks arg error",
-			&Statement{Select: &SelectStmt{
-				Where: &CompareExpr{
-					Left:  &FunctionCall{Name: "blocks", Args: []Expr{badExpr}},
-					Op:    "=",
-					Right: &ListLiteral{Elements: nil},
-				},
-			}},
-		},
 	}
 
 	for _, tt := range tests {
@@ -2626,32 +2598,6 @@ func TestExecuteUnknownExprType(t *testing.T) {
 	_, err := e.testExec(stmt, tikis)
 	if err == nil || !strings.Contains(err.Error(), "unknown expression type") {
 		t.Fatalf("expected unknown expression type error, got: %v", err)
-	}
-}
-
-// --- blocks returning empty list ---
-
-func TestExecuteBlocksNoBlockers(t *testing.T) {
-	e := newTestExecutor()
-	tikis := []*tikiFixture{
-		{ID: "T1", Title: "x", Status: "ready"},
-		{ID: "T2", Title: "y", Status: "ready"},
-	}
-
-	stmt := &Statement{Select: &SelectStmt{
-		Where: &CompareExpr{
-			Left:  &FunctionCall{Name: "blocks", Args: []Expr{&FieldRef{Name: "id"}}},
-			Op:    "=",
-			Right: &ListLiteral{Elements: nil},
-		},
-	}}
-	result, err := e.testExec(stmt, tikis)
-	if err != nil {
-		t.Fatalf("execute: %v", err)
-	}
-	// no tiki depends on any other, so blocks() returns [] for all → all match
-	if len(result.Select.Tikis) != 2 {
-		t.Fatalf("expected 2, got %d", len(result.Select.Tikis))
 	}
 }
 

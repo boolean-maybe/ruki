@@ -44,11 +44,6 @@ func TestParseTrigger_BeforeDeny(t *testing.T) {
 			"update",
 		},
 		{
-			"no empty epics",
-			`before update where new.status = "done" and new.type = "epic" and blocks(new.id) is empty deny "epic has no dependencies"`,
-			"update",
-		},
-		{
 			"WIP limit",
 			`before update where new.status = "inProgress" and count(select where assignee = new.assignee and status = "inProgress") >= 3 deny "WIP limit reached for this assignee"`,
 			"update",
@@ -114,27 +109,9 @@ func TestParseTrigger_AfterAction(t *testing.T) {
 			false, true, false, false,
 		},
 		{
-			"cascade epic completion",
-			`after update where new.status = "done" update where id in blocks(old.id) and type = "epic" and dependsOn all status = "done" set status="done"`,
-			"update",
-			false, true, false, false,
-		},
-		{
-			"reopen epic on regression",
-			`after update where old.status = "done" and new.status != "done" update where id in blocks(old.id) and type = "epic" and status = "done" set status="inProgress"`,
-			"update",
-			false, true, false, false,
-		},
-		{
 			"auto tag bugs",
 			`after create where new.type = "bug" update where id = new.id set tags=new.tags + ["needs-triage"]`,
 			"create",
-			false, true, false, false,
-		},
-		{
-			"propagate cancellation",
-			`after update where new.status = "cancelled" update where id in blocks(old.id) and status in ["backlog", "ready"] set status="cancelled"`,
-			"update",
 			false, true, false, false,
 		},
 		{
